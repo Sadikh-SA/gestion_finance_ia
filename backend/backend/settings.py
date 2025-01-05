@@ -11,9 +11,14 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
 
+# Spécifie le chemin de base pour le dossier 'media'
+MEDIA_URL = '/media/'  # URL d'accès au fichier
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # Chemin absolu vers le dossier 'media'
 
 
 # Quick-start development settings - unsuitable for production
@@ -38,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'finance',  # Ajoute finance ici
+    'rest_framework',  # Ajoute cette ligne
 ]
 
 MIDDLEWARE = [
@@ -86,6 +92,15 @@ DATABASES = {
         # 'NAME': BASE_DIR / 'db.sqlite3',
     }
     
+}
+
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
 }
 
 
