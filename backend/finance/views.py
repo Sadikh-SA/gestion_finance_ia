@@ -94,3 +94,131 @@ class ImporterExcel(APIView):
                 return Response({"error": f"Erreur lors de l'importation de la ligne : {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response({"message": "Importation réussie."}, status=status.HTTP_200_OK)
+    
+class PrevisionsDepenses:
+    def __init__(self, start_date, end_date):
+        self.start_date = start_date
+        self.end_date = end_date
+
+    def get_previsions(self):
+        # Récupérer les transactions dans la plage de dates
+        transactions = Transaction.objects.filter(date__range=[self.start_date, self.end_date])
+
+        # Si aucune donnée, retourner un message d'erreur
+        if not transactions:
+            return {'error': 'Aucune donnée trouvée pour cette période.'}
+
+        # Convertir en DataFrame
+        df = pd.DataFrame(list(transactions.values('date', 'montant', 'categorie__nom')))
+
+        # Agréger les dépenses par mois
+        df['date'] = pd.to_datetime(df['date'])
+        df['mois'] = df['date'].dt.to_period('M')
+        depenses_mensuelles = df.groupby('mois')['montant'].sum()
+
+        # Calcul de la moyenne mobile pour les prévisions futures
+        depenses_mensuelles['prevision'] = depenses_mensuelles.rolling(window=3).mean()
+
+        # Prendre la prévision pour le dernier mois comme estimation
+        prevision = depenses_mensuelles['prevision'].iloc[-1] if len(depenses_mensuelles) > 2 else 0
+
+        return {'prevision': prevision}
+    
+class PrevisionsDepensesView(APIView):
+    def get(self, request):
+        try:
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+
+            # Vérifier que les dates sont présentes
+            if not start_date or not end_date:
+                return Response({'error': 'Les dates start_date et end_date sont nécessaires.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Initialiser la classe et appeler la fonction de prévision
+            previsions = PrevisionsDepenses(start_date, end_date)
+            result = previsions.get_previsions()
+
+            return Response(result, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class OptimisationBudget:
+    def __init__(self, categorie, budget):
+        self.categorie = categorie
+        self.budget = budget
+
+    def optimiser_budget(self):
+        transactions = Transaction.objects.filter(categorie__nom=self.categorie)
+        depenses_totales = transactions.aggregate(Sum('montant'))['montant__sum'] or 0
+
+        # Calcul de l'optimisation du budget (en pourcentage)
+        pourcentage_depenses = (depenses_totales / self.budget) * 100
+
+        if pourcentage_depenses > 100:
+            return f"Votre budget pour {self.categorie} est dépassé. Vous avez dépassé de {pourcentage_depenses - 100:.2f}%."
+        elif pourcentage_depenses < 80:
+            return f"Vous avez économisé sur votre budget {self.categorie}. Vous avez dépensé seulement {pourcentage_depenses:.2f}%, vous pourriez réduire votre budget."
+        else:
+            return f"Votre budget pour {self.categorie} est équilibré, vous avez utilisé {pourcentage_depenses:.2f}% de votre budget."
+        
+class OptimisationBudgetView(APIView):
+    def get(self, request):
+        try:
+            categorie = request.query_params.get('categorie')
+            budget = request.query_params.get('budget')
+
+            # Vérifier que les paramètres sont présents
+            if not categorie or not budget:
+                return Response({'error': 'La catégorie et le budget sont nécessaires.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Initialiser la classe et appeler la fonction d'optimisation
+            optimisation = OptimisationBudget(categorie, float(budget))
+            result = optimisation.optimiser_budget()
+
+            return Response({'result': result}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class AnalyseTendances:
+    def __init__(self, start_date, end_date):
+        self.start_date = start_date
+        self.end_date = end_date
+
+    def get_tendances(self):
+        transactions = Transaction.objects.filter(date__range=[self.start_date, self.end_date])
+
+        if not transactions:
+            return {'error': 'Aucune donnée trouvée pour cette période.'}
+
+        df = pd.DataFrame(list(transactions.values('date', 'montant')))
+        df['date'] = pd.to_datetime(df['date'])
+        df['mois'] = df['date'].dt.to_period('M')
+        depenses_mensuelles = df.groupby('mois')['montant'].sum()
+
+        # Créer un graphique ou des données analytiques
+        tendances = depenses_mensuelles.to_dict()
+
+        return {'tendances': tendances}
+    
+class AnalyseTendancesView(APIView):
+    def get(self, request):
+        try:
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+
+            # Vérifier que les dates sont présentes
+            if not start_date or not end_date:
+                return Response({'error': 'Les dates start_date et end_date sont nécessaires.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Initialiser la classe et appeler la fonction d'analyse des tendances
+            analyse = AnalyseTendances(start_date, end_date)
+            result = analyse.get_tendances()
+
+            return Response(result, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
